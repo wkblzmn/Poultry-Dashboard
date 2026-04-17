@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poultry Monitor Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  [data-theme="light"]{
+    --bg:#f5f6f7;--surface:#ffffff;--surface2:#f0f2f4;
+    --text:#1a1a1a;--text2:#555;--text3:#999;--border:#e2e4e8;
+    --chart-grid:rgba(0,0,0,0.06);--tick:#888;--legend:#555;
+  }
+  [data-theme="dark"]{
+    --bg:#0f1117;--surface:#1c1f26;--surface2:#252830;
+    --text:#e8eaf0;--text2:#9098a8;--text3:#555;--border:#2e3240;
+    --chart-grid:rgba(255,255,255,0.05);--tick:#9098a8;--legend:#9098a8;
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);padding:1.5rem;min-height:100vh;transition:background .25s,color .25s}
+  .dash{max-width:1100px;margin:0 auto}
+  .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:12px}
+  .header h1{font-size:20px;font-weight:600}
+  .header p{font-size:13px;color:var(--text2);margin-top:3px}
+  .header-right{display:flex;align-items:center;gap:10px}
+  .refresh-btn{font-size:13px;padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);cursor:pointer;transition:background .2s}
+  .refresh-btn:hover{background:var(--surface2)}
+  .theme-btn{
+    width:64px;height:30px;border-radius:15px;
+    background:var(--surface2);border:1px solid var(--border);
+    cursor:pointer;display:flex;align-items:center;
+    padding:0 6px;justify-content:space-between;
+    transition:background .25s;position:relative;
+  }
+  .theme-btn-icon{font-size:14px;line-height:1;z-index:1;transition:opacity .2s}
+  .theme-btn-knob{
+    position:absolute;width:22px;height:22px;border-radius:50%;
+    background:#ffffff;top:3px;left:4px;
+    transition:transform .25s,background .25s;
+    box-shadow:0 1px 3px rgba(0,0,0,0.2);
+  }
+  [data-theme="dark"] .theme-btn-knob{transform:translateX(34px);background:#3a3f50}
+  [data-theme="dark"] .theme-btn{background:#1c1f26}
+  .tier-banner{border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:20px;border:1px solid var(--border);background:var(--surface);flex-wrap:wrap;transition:background .25s,border-color .3s}
+  .tier-score{font-size:56px;font-weight:700;line-height:1;min-width:80px;transition:color .3s}
+  .tier-label{font-size:24px;font-weight:600}
+  .tier-sub{font-size:13px;color:var(--text2);margin-top:4px}
+  .tier-bar{height:8px;border-radius:4px;background:var(--border);margin-top:12px;overflow:hidden;width:220px;max-width:100%}
+  .tier-fill{height:100%;border-radius:4px;transition:width .6s,background .4s}
+  .nodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:1.5rem}
+  .node-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:background .25s}
+  .node-name{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#999;flex-shrink:0;transition:background .4s}
+  .node-temp{font-size:28px;font-weight:600}
+  .node-hum{font-size:13px;color:var(--text2);margin-top:3px}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:1.5rem}
+  .metric{background:var(--surface2);border-radius:8px;padding:14px 16px;transition:background .25s}
+  .metric-label{font-size:12px;color:var(--text2);margin-bottom:6px}
+  .metric-val{font-size:24px;font-weight:600}
+  .metric-unit{font-size:14px;font-weight:400;color:var(--text2)}
+  .metric-sub{font-size:11px;color:var(--text3);margin-top:3px}
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:1.5rem}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;transition:background .25s}
+  .chart-title{font-size:14px;font-weight:500;margin-bottom:14px}
+  .chart-wrap{height:180px;position:relative}
+  .status-row{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);color:var(--text2);background:var(--surface2);transition:background .25s}
+</style>
+</head>
+<body>
+<div class="dash">
+
+  <div class="header">
+    <div>
+      <h1>Poultry Monitor</h1>
+      <p id="last-update">Connecting to Adafruit IO...</p>
+    </div>
+    <div class="header-right">
+      <button class="theme-btn" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <span class="theme-btn-icon">☀</span>
+        <span class="theme-btn-icon">☽</span>
+        <span class="theme-btn-knob"></span>
+      </button>
+      <button class="refresh-btn" onclick="fetchAll()">Refresh</button>
+    </div>
+  </div>
+
+  <div class="tier-banner" id="tier-banner">
+    <div class="tier-score" id="mrs-score">--</div>
+    <div>
+      <div class="tier-label" id="tier-label">Loading...</div>
+      <div class="tier-sub" id="tier-sub">Fetching live data from Adafruit IO</div>
+      <div class="tier-bar"><div class="tier-fill" id="tier-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="nodes">
+    <div class="node-card">
+      <div class="node-name"><span class="dot" id="dot-c"></span>Central node</div>
+      <div class="node-temp" id="temp-c">--°C</div>
+      <div class="node-hum" id="hum-c">-- % RH</div>
+    </div>
+    <div class="node-card">
+      <div class="node-name"><span class="dot" id="dot-a"></span>Satellite A</div>
+      <div class="node-temp" id="temp-a">--°C</div>
+      <div class="node-hum">roof zone</div>
+    </div>
+    <div class="node-card">
+      <div class="node-name"><span class="dot" id="dot-b"></span>Satellite B</div>
+      <div class="node-temp" id="temp-b">--°C</div>
+      <div class="node-hum">floor zone</div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Air quality (MQ-135)</div>
+      <div class="metric-val" id="air-val">--<span class="metric-unit"> ADC</span></div>
+      <div class="metric-sub" id="air-sub">--</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Feed level</div>
+      <div class="metric-val" id="feed-val">--<span class="metric-unit"> cm</span></div>
+      <div class="metric-sub">hopper distance</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Water triggers</div>
+      <div class="metric-val" id="water-val">--</div>
+      <div class="metric-sub">per 30s window</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Temp spread</div>
+      <div class="metric-val" id="spread-val">--<span class="metric-unit">°C</span></div>
+      <div class="metric-sub">roof vs floor delta</div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <div class="chart-title">Mortality Risk Score</div>
+      <div class="chart-wrap"><canvas id="chart-mrs"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Temperature — all zones</div>
+      <div class="chart-wrap"><canvas id="chart-temp"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Air quality</div>
+      <div class="chart-wrap"><canvas id="chart-air"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Humidity</div>
+      <div class="chart-wrap"><canvas id="chart-hum"></canvas></div>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <span class="chip">Auto-refresh every 30s</span>
+    <span class="chip" id="chip-feeds">Feeds: --</span>
+    <span class="chip" id="chip-api">API: connecting</span>
+    <span class="chip">wkblzmn @ Adafruit IO</span>
+  </div>
+
+</div>
+<script>
+const AIO_USER='wkblzmn';
+let AIO_KEY=localStorage.getItem('aio_key')||'';
+if(!AIO_KEY){AIO_KEY=prompt('Enter your Adafruit IO Key:','');if(AIO_KEY)localStorage.setItem('aio_key',AIO_KEY);}
+const BASE=`https://io.adafruit.com/api/v2/${AIO_USER}/feeds`;
+const HEADERS={'X-AIO-Key':AIO_KEY};
+const LIMIT=30;
+const TIERS={
+  'Normal': {fill:'#1D9E75',border:'#0F6E56',bg:'rgba(29,158,117,0.08)'},
+  'CAUTION':{fill:'#BA7517',border:'#854F0B',bg:'rgba(186,117,23,0.08)'},
+  'HIGH':   {fill:'#D85A30',border:'#993C1D',bg:'rgba(216,90,48,0.08)'},
+  'DANGER': {fill:'#E24B4A',border:'#A32D2D',bg:'rgba(226,75,74,0.08)'},
+};
+let charts={};
+let isDark=false;
+
+function getCSSVar(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+
+function toggleTheme(){
+  isDark=!isDark;
+  document.documentElement.setAttribute('data-theme',isDark?'dark':'light');
+  localStorage.setItem('theme',isDark?'dark':'light');
+  updateChartTheme();
+}
+
+function updateChartTheme(){
+  const grid=getCSSVar('--chart-grid');
+  const tick=getCSSVar('--tick');
+  const legend=getCSSVar('--legend');
+  Object.values(charts).forEach(c=>{
+    if(!c)return;
+    if(c.options.scales.y){c.options.scales.y.grid.color=grid;c.options.scales.y.ticks.color=tick;}
+    if(c.options.plugins.legend?.labels)c.options.plugins.legend.labels.color=legend;
+    c.update('none');
+  });
+}
+
+function makeOpts(showLegend){
+  const grid=getCSSVar('--chart-grid');
+  const tick=getCSSVar('--tick');
+  const legend=getCSSVar('--legend');
+  return{
+    responsive:true,maintainAspectRatio:false,animation:false,
+    plugins:{legend:{display:!!showLegend,labels:{font:{size:11},boxWidth:12,padding:8,color:legend}}},
+    scales:{x:{display:false},y:{grid:{color:grid},ticks:{font:{size:11},maxTicksLimit:5,color:tick}}}
+  };
+}
+
+function initCharts(){
+  charts.mrs =new Chart(document.getElementById('chart-mrs'), {type:'line',data:{labels:[],datasets:[{label:'MRS',data:[],borderColor:'#E24B4A',borderWidth:2,pointRadius:0,tension:0.3,fill:false}]},options:makeOpts(false)});
+  charts.air =new Chart(document.getElementById('chart-air'), {type:'line',data:{labels:[],datasets:[{label:'Air',data:[],borderColor:'#D85A30',borderWidth:2,pointRadius:0,tension:0.3,fill:false}]},options:makeOpts(false)});
+  charts.hum =new Chart(document.getElementById('chart-hum'), {type:'line',data:{labels:[],datasets:[{label:'Hum',data:[],borderColor:'#378ADD',borderWidth:2,pointRadius:0,tension:0.3,fill:false}]},options:makeOpts(false)});
+  charts.temp=new Chart(document.getElementById('chart-temp'),{type:'line',data:{labels:[],datasets:[
+    {label:'Central',data:[],borderColor:'#1D9E75',borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+    {label:'Sat A',  data:[],borderColor:'#E24B4A',borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+    {label:'Sat B',  data:[],borderColor:'#378ADD',borderWidth:2,pointRadius:0,tension:0.3,fill:false},
+  ]},options:makeOpts(true)});
+}
+
+function getLabels(data){
+  return data.map(d=>{
+    const t=new Date(d.created_at);
+    return t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
+  });
+}
+function updateChart(key,data,di=0){
+  const c=charts[key];if(!c||!data||!data.length)return;
+  c.data.labels=getLabels(data);
+  c.data.datasets[di].data=data.map(d=>parseFloat(d.value).toFixed(1));
+  c.update('none');
+}
+async function fetchFeed(feed){
+  try{
+    const r=await fetch(`${BASE}/${feed}/data?limit=${LIMIT}`,{headers:HEADERS});
+    if(!r.ok)return null;
+    return(await r.json()).reverse();
+  }catch(e){return null;}
+}
+function getTier(v){
+  if(v>=80)return'DANGER';if(v>=60)return'HIGH';if(v>=40)return'CAUTION';return'Normal';
+}
+async function fetchAll(){
+  document.getElementById('chip-api').textContent='API: fetching...';
+  try{
+    const[mrs,tempC,tempA,tempB,hum,air,feed,water]=await Promise.all([
+      fetchFeed('mrs-score'),fetchFeed('temperature-central'),
+      fetchFeed('temperature-sat-a'),fetchFeed('temperature-sat-b'),
+      fetchFeed('humidity'),fetchFeed('air-quality'),
+      fetchFeed('feed-distance'),fetchFeed('water-triggers'),
+    ]);
+    const loaded=[mrs,tempC,tempA,tempB,hum,air,feed,water].filter(Boolean).length;
+    document.getElementById('chip-feeds').textContent=`Feeds: ${loaded}/8`;
+    document.getElementById('chip-api').textContent='API: connected';
+    document.getElementById('last-update').textContent='Last updated: '+new Date().toLocaleTimeString();
+
+    if(mrs&&mrs.length){
+      const v=parseFloat(mrs[mrs.length-1].value);
+      const tier=getTier(v);const tc=TIERS[tier];
+      document.getElementById('mrs-score').textContent=v.toFixed(1);
+      document.getElementById('mrs-score').style.color=tc.fill;
+      document.getElementById('tier-label').textContent=tier;
+      document.getElementById('tier-sub').textContent='Mortality Risk Score — auto-updating every 30s';
+      document.getElementById('tier-fill').style.cssText=`width:${Math.min(v,100)}%;background:${tc.fill}`;
+      const b=document.getElementById('tier-banner');
+      b.style.borderColor=tc.border;b.style.background=tc.bg;
+      updateChart('mrs',mrs);
+    }
+    const lv=(a)=>a&&a.length?parseFloat(a[a.length-1].value).toFixed(1):'--';
+    const tc=lv(tempC),ta=lv(tempA),tb=lv(tempB);
+    document.getElementById('temp-c').textContent=tc+'°C';
+    document.getElementById('temp-a').textContent=ta+'°C';
+    document.getElementById('temp-b').textContent=tb+'°C';
+    if(hum&&hum.length)document.getElementById('hum-c').textContent=parseFloat(hum[hum.length-1].value).toFixed(0)+'% RH';
+    const spread=(tc!=='--'&&ta!=='--')?Math.abs(parseFloat(tc)-parseFloat(ta)).toFixed(1):'--';
+    document.getElementById('spread-val').innerHTML=spread+'<span class="metric-unit">°C</span>';
+    if(air&&air.length){
+      const av=parseInt(air[air.length-1].value);
+      document.getElementById('air-val').innerHTML=av+'<span class="metric-unit"> ADC</span>';
+      document.getElementById('air-sub').textContent=av>400?'Elevated — check ammonia':av>250?'Moderate':'Normal';
+    }
+    document.getElementById('feed-val').innerHTML=lv(feed)+'<span class="metric-unit"> cm</span>';
+    document.getElementById('water-val').textContent=water&&water.length?water[water.length-1].value:'--';
+    ['dot-c','dot-a','dot-b'].forEach(id=>document.getElementById(id).style.background='#1D9E75');
+    updateChart('air',air);updateChart('hum',hum);
+    if(tempC&&tempA&&tempB){
+      charts.temp.data.labels=getLabels(tempC);
+      charts.temp.data.datasets[0].data=tempC.map(d=>parseFloat(d.value).toFixed(1));
+      charts.temp.data.datasets[1].data=tempA.map(d=>parseFloat(d.value).toFixed(1));
+      charts.temp.data.datasets[2].data=tempB.map(d=>parseFloat(d.value).toFixed(1));
+      charts.temp.update('none');
+    }
+  }catch(e){
+    document.getElementById('chip-api').textContent='API: error';
+    document.getElementById('last-update').textContent='Connection failed — retrying in 30s';
+  }
+}
+
+const saved=localStorage.getItem('theme');
+if(saved==='dark'||(!saved&&window.matchMedia('(prefers-color-scheme: dark)').matches)){
+  isDark=true;document.documentElement.setAttribute('data-theme','dark');
+}
+initCharts();fetchAll();setInterval(fetchAll,30000);
+</script>
+</body>
+</html>
